@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.env
+.vscode/
+
+# Project Specific
+logs/
+data/
+test_env/
+test_workspace/
+result.json
+note.txt
