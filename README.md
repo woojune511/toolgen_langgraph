@@ -32,7 +32,7 @@ toolgen_langgraph/
 
 1.  **Clone the repository**:
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/woojune511/toolgen_langgraph.git
     cd toolgen_langgraph
     ```
 
