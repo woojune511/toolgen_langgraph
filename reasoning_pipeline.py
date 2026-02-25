@@ -11,7 +11,11 @@ load_dotenv()
 
 logger = get_logger("ReasoningPipeline")
 
-RESULT_FILE = "reasoning_full_results.json"
+from src.config import MODEL_NAME
+
+# 모델명에서 파일명 안전한 부분만 추출
+_model_tag = MODEL_NAME.split("/")[-1].replace(".", "_")
+RESULT_FILE = f"reasoning_results_{_model_tag}.json"
 
 
 def load_dataset(dataset_path):

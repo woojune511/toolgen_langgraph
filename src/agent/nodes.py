@@ -29,6 +29,73 @@ llm = ChatOpenAI(
 )
 
 
+def grounding_node(state: AgentState, sandbox: AgentSandbox):
+    """Context Grounding: 실행 환경을 코드로 탐색하여 Planner에게 맥락을 제공한다."""
+    problem = state["problem"]
+    work_dir = state.get("work_dir", "./")
+
+    logger.info(f"🔍 Grounding: Exploring environment in {work_dir}...")
+
+    # Step 1: LLM에게 탐색 코드 생성 요청
+    prompt = f"""You are an environment analyst. Before solving a problem, you need to understand the available resources.
+
+Given a problem description and a working directory, write Python code to explore and summarize the environment.
+
+## Problem:
+{problem}
+
+## Working Directory: {work_dir}
+
+## Instructions:
+1. List all files and subdirectories in the working directory.
+2. For each data file found (CSV, Excel, JSON, Parquet, etc.):
+   - Load it and print its shape, column names, dtypes, and first 3 rows.
+3. For each text file (TXT, MD, etc.):
+   - Print its contents (first 500 chars if too long).
+4. Print a summary of what resources are available.
+5. Use try/except to handle any errors gracefully.
+6. Keep output concise but informative.
+
+```python
+# Your exploration code here
+```
+"""
+
+    response = llm.invoke(prompt).content
+
+    # 코드 추출
+    code_match = re.search(r'```python(.*?)```', response, re.DOTALL)
+    if code_match:
+        code = code_match.group(1).strip()
+    else:
+        # Fallback: 기본 탐색 코드
+        code = f"""
+import os
+print("=== Files in working directory ===")
+for f in sorted(os.listdir('{work_dir}')):
+    fpath = os.path.join('{work_dir}', f)
+    size = os.path.getsize(fpath) if os.path.isfile(fpath) else 'DIR'
+    print(f"  {{f}} ({{size}})")
+"""
+
+    # Step 2: 코드 실행
+    result = sandbox.run_code(code, mode="permanent")
+
+    grounding_context = ""
+    if result["stdout"]:
+        grounding_context = result["stdout"][:3000]  # 토큰 절약
+        logger.info(f"   ✅ Grounding complete ({len(grounding_context)} chars)")
+    else:
+        grounding_context = "No output from environment exploration."
+        logger.warning(f"   ⚠️ Grounding produced no output.")
+
+    if result["stderr"]:
+        logger.warning(f"   ⚠️ Grounding errors: {result['stderr'][:200]}")
+        grounding_context += f"\n[Errors]: {result['stderr'][:500]}"
+
+    return {"grounding_context": grounding_context}
+
+
 def planner_node(state: AgentState):
     logger.info(f"Planning task...")
 
@@ -111,6 +178,9 @@ Follow these guidelines strictly:
 
 ---
 
+## Environment Context:
+===grounding===
+
 ## Query:
 ===query===
 
@@ -131,7 +201,9 @@ Respond **strictly** in the following **JSON format**:
     # prompt = dedent(prompt)
     while True:
         try:
-            plan = llm.invoke(prompt.replace('===query===', state['problem'])).content
+            grounding = state.get('grounding_context', 'No environment context available.')
+            filled = prompt.replace('===query===', state['problem']).replace('===grounding===', grounding)
+            plan = llm.invoke(filled).content
 
             if '```json' in plan:
                 plan = plan.split('```json')[1].split('```')[0]

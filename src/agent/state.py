@@ -10,6 +10,7 @@ class AgentState(TypedDict):
     plan: Any                   # Planner가 만든 계획
     current_step_index: int     # 현재 계획 단계
     decision: str               # 라우팅 결정
+    grounding_context: str      # Grounding 노드가 수집한 환경 정보
     context_log: Annotated[List[str], operator.add]
     error: Optional[str]
     variable_inventory: Dict[str, str]

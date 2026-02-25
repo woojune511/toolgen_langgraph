@@ -6,24 +6,24 @@ This project targets the **DSBench** benchmark for data science tasks and includ
 
 ## 📊 Results
 
-### MATH Benchmark (Llama 3.3 70B, 700 problems)
+### MATH Benchmark (700 problems, Reasoning Pipeline)
 
-| Approach | Accuracy | Improvement |
-|----------|----------|-------------|
-| CoT Only (baseline) | 62.7% (439/700) | — |
-| **Reasoning Pipeline (CoT + Code Verify)** | **77.9% (545/700)** | **+15.1pp** |
+| Model | CoT Only | Pipeline (CoT + Code Verify) | Code Corrected |
+|-------|----------|------------------------------|----------------|
+| Llama 3.3 70B | 62.7% | **77.9%** (+15.1pp) | 106 problems |
+| **Gemini 2.5 Flash** | 87.1% | **92.6%** (+5.4pp) | 38 problems |
 
-Code verification corrected **106 problems** that CoT alone got wrong.
+### Per-Domain Breakdown
 
-| Domain | CoT Only | Pipeline | Δ |
-|--------|----------|----------|---|
-| Algebra | 90% | **98%** | +8 |
-| Number Theory | 76% | **94%** | +18 |
-| Prealgebra | 84% | **90%** | +6 |
-| Counting & Probability | 65% | **82%** | +17 |
-| Intermediate Algebra | 43% | **70%** | +27 |
-| Precalculus | 35% | **58%** | +23 |
-| Geometry | 46% | **53%** | +7 |
+| Domain | Llama CoT | Llama Pipeline | Gemini CoT | Gemini Pipeline |
+|--------|-----------|----------------|------------|-----------------|
+| Algebra | 90% | 98% | 96% | **100%** |
+| C&P | 65% | 82% | 93% | **97%** |
+| Geometry | 46% | 53% | 68% | **80%** |
+| Int. Algebra | 43% | 70% | 85% | **94%** |
+| Number Theory | 76% | 94% | 95% | **96%** |
+| Prealgebra | 84% | 90% | 93% | **94%** |
+| Precalculus | 35% | 58% | 80% | **87%** |
 
 ## 🚀 Key Features
 

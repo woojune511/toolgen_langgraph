@@ -74,6 +74,7 @@ def main():
                 "current_step_index": 0,
                 "decision": "",
                 "context_log": [],
+                "grounding_context": "",
                 "variable_inventory": {},
                 "tool_retrieved": [],
                 "tool_generated": [],
@@ -152,6 +153,7 @@ def test_single():
         "current_step_index": 0,
         "decision": "",
         "context_log": [],
+        "grounding_context": "",
         "variable_inventory": {},
         "tool_retrieved": [],
         "tool_generated": [],
@@ -214,6 +216,7 @@ def run_test():
             "plan": ["Calculate average"],
             "current_step_index": 0,
             "context_log": [],
+            "grounding_context": "",
             # 가짜로 생성된 도구 리스트 주입
             "tool_generated": [
                 {
@@ -252,6 +255,7 @@ def calculate_mean(numbers):
             "plan": ["Calculate average"],
             "current_step_index": 0,
             "context_log": [],
+            "grounding_context": "",
             "tool_generated": [
                 {
                     "name": "calculate_mean_buggy",

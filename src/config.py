@@ -24,4 +24,5 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 BASE_URL = "https://openrouter.ai/api/v1"
 API_KEY = os.environ.get("OPENROUTER_API_KEY")
-MODEL_NAME = "meta-llama/llama-3.3-70b-instruct"
+# MODEL_NAME = "meta-llama/llama-3.3-70b-instruct"
+MODEL_NAME = "google/gemini-2.5-flash"

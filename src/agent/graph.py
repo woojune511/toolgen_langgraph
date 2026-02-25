@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, END
 from src.agent.state import AgentState
 from src.agent.nodes import (
-    planner_node, tool_manager_node, tool_creator_node, 
+    grounding_node, planner_node, tool_manager_node, tool_creator_node, 
     tool_tester_node, solver_node, reasoner_node, final_answer_node
 )
 from functools import partial
@@ -10,16 +10,18 @@ def build_graph(sandbox):
     workflow = StateGraph(AgentState)
 
     # 노드 추가
+    workflow.add_node("grounding", partial(grounding_node, sandbox=sandbox))
     workflow.add_node("planner", planner_node)
     workflow.add_node("manager", tool_manager_node)
     workflow.add_node("creator", tool_creator_node)
     workflow.add_node("tester", partial(tool_tester_node, sandbox=sandbox))
     workflow.add_node("solver", partial(solver_node, sandbox=sandbox))
-    workflow.add_node("reasoner", reasoner_node)  # NEW: Reasoner Node
+    workflow.add_node("reasoner", reasoner_node)
     workflow.add_node("final_answer", partial(final_answer_node, sandbox=sandbox))
 
     # 엣지 연결
-    workflow.set_entry_point("planner")
+    workflow.set_entry_point("grounding")
+    workflow.add_edge("grounding", "planner")
     workflow.add_edge("planner", "manager")
 
     # Manager 분기

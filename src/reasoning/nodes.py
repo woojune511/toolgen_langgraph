@@ -15,6 +15,11 @@ llm = ChatOpenAI(
     temperature=0.7,
     max_retries=2,
     request_timeout=120,
+    model_kwargs={
+        "extra_body": {
+            "reasoning": {"effort": "none"}
+        }
+    },
 )
 
 
