@@ -2,7 +2,7 @@ from langgraph.graph import StateGraph, END
 from src.agent.state import AgentState
 from src.agent.nodes import (
     planner_node, tool_manager_node, tool_creator_node, 
-    tool_tester_node, solver_node, final_answer_node
+    tool_tester_node, solver_node, reasoner_node, final_answer_node
 )
 from functools import partial
 
@@ -15,6 +15,7 @@ def build_graph(sandbox):
     workflow.add_node("creator", tool_creator_node)
     workflow.add_node("tester", partial(tool_tester_node, sandbox=sandbox))
     workflow.add_node("solver", partial(solver_node, sandbox=sandbox))
+    workflow.add_node("reasoner", reasoner_node)  # NEW: Reasoner Node
     workflow.add_node("final_answer", partial(final_answer_node, sandbox=sandbox))
 
     # 엣지 연결
@@ -23,8 +24,42 @@ def build_graph(sandbox):
 
     # Manager 분기
     def manager_router(state):
-        return "solver" if state["decision"] == "solve" else "creator"
-    workflow.add_conditional_edges("manager", manager_router)
+        decision = state["decision"]
+        if decision == "solve":
+            return "solver"
+        elif decision == "reason":  # NEW: Route to Reasoner
+            return "reasoner"
+        else:
+            return "creator"
+            
+    workflow.add_conditional_edges(
+        "manager", 
+        manager_router,
+        {
+            "solver": "solver",
+            "reasoner": "reasoner",
+            "creator": "creator"
+        }
+    )
+
+    # Reasoner Routing (Solver와 유사)
+    def route_after_reasoner(state: AgentState):
+        plan = state['plan']
+        current_step = state['current_step_index']
+        
+        if current_step < len(plan):
+            return "manager"
+        else:
+            return "final_answer"
+
+    workflow.add_conditional_edges(
+        "reasoner",
+        route_after_reasoner,
+        {
+            "manager": "manager",
+            "final_answer": "final_answer"
+        }
+    )
 
     # Creator -> Tester
     workflow.add_edge("creator", "tester")
@@ -58,6 +93,7 @@ def build_graph(sandbox):
             
             # B-1: 아직 수행할 계획(Step)이 남았음
             # -> 다음 Step을 위한 도구를 만들러(Creator) 이동
+            # (수정: Creator가 아니라 Manager로 가야 함. Manager가 판단.)
             if current_step < len(plan):
                 return "manager"
                 

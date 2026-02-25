@@ -231,7 +231,7 @@ class DSBenchLoader:
 # TEST CODE
 # --------------------------------------------------------------------------------
 if __name__ == "__main__":
-    ROOT_DIR = "/c1/geonju/project/data/dataset/DSBench" 
+    ROOT_DIR = "/c1/geonju/toolgen_langgraph/data/dataset/DSBench" 
     print(f"🚀 Testing DSBenchLoader with root: {os.path.abspath(ROOT_DIR)}")
 
     # TEST 1: Analysis Mode

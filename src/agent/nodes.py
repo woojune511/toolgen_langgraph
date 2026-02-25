@@ -48,15 +48,15 @@ def planner_node(state: AgentState):
                 Follow these guidelines strictly:
 
                 1. **Clearly define each subtask**:
-                    - Each subtask must represent an independent, fundamental step solvable by a Python function.
-                    - Clearly describe the input/output data required and intermediate values, without specifying exact function signatures.
+                    - Each subtask must represent an independent, fundamental step.
+                    - **Step Type**: Assign a `type` to each step: `"tool"` or `"reasoning"`.
+                        - `"tool"`: Use for heavy calculations, simulations, file I/O, dataframe manipulation, or complex algorithmic tasks (e.g., shortest path).
+                        - `"reasoning"`: Use for logical deduction, simplifying fractions, summarizing results, establishing equations, or simple arithmetic that doesn't need Python.
+                    - Clearly describe the input/output data required and intermediate values.
 
                 2. **Abstract and general**:
                     - Design subtasks broadly enough to encourage reuse across multiple similar queries.
                     - Avoid overly narrow or query-specific subtasks.
-                    - Consider the meaning of each value in solving given problem and focus on underlying core principles and essence, not superficial functionality.
-                    - Do not include trivial, meaningless step.
-                    - Do not turn problem-specific logic into a subtask.
 
                 ---
 
@@ -70,6 +70,7 @@ def planner_node(state: AgentState):
                 [
                     {{
                         "name": "Name of subtask 1",
+                        "type": "tool" or "reasoning",
                         "description": "A brief, abstract description of subtask 1.",
                         "input": {{
                             "input_var_1": {{
@@ -95,13 +96,18 @@ def planner_node(state: AgentState):
 
 
     prompt = f"""Analyze the User Request and break it down into subtasks.
-If necessary, you can use Python coding tasks.
 
 Follow these guidelines strictly:
 
 1. **Clearly define each subtask**:
-    - Each subtask must represent an independent, fundamental step solvable by a Python function.
-    - Clearly describe the input/output data required and intermediate values, without specifying exact function signatures.
+    - Each subtask must represent an independent, fundamental step.
+    - Clearly describe the input/output data required and intermediate values.
+    - **Step Type**: Assign a `type` to each step: `"tool"` or `"reasoning"`.
+        - `"tool"`: Use ONLY for heavy calculations, simulations, file I/O, dataframe manipulation, or complex algorithmic tasks that genuinely benefit from Python code execution (e.g., Monte Carlo simulation, large combinatorics, graph algorithms).
+        - `"reasoning"`: Use for logical deduction, simplifying fractions, establishing equations, simple arithmetic, counting small cases, summarizing results, or any step where a human would solve it by thinking rather than coding.
+    - **CRITICAL**: Default to `"reasoning"` unless the step clearly requires code. Most math problem steps are reasoning.
+    - **CRITICAL**: If the problem description includes `[asy]` code, you MUST create a specific subtask to parse or analyze this code to extract geometric parameters (e.g., grid size, coordinates, labels). Do not ignore it.
+    - **CRITICAL**: If the answer is expected to be a fraction, ensure there is a step to simplify it (as `"reasoning"` type).
 
 ---
 
@@ -115,6 +121,7 @@ Respond **strictly** in the following **JSON format**:
 [
     {{
         "name": "Name of subtask 1",
+        "type": "tool" or "reasoning",
         "description": "A description of subtask 1."
     }},
     # add more subtasks as needed
@@ -146,12 +153,20 @@ Respond **strictly** in the following **JSON format**:
     return {"plan": plan, "current_step_index": 0, "context_log": []}
 
 
-
 def tool_manager_node(state: AgentState):
     plan = state['plan']
     idx = state['current_step_index']
     current_task = plan[idx]
     logger.info(f"🔍 Checking tools for {idx+1}/{len(plan)} tasks...")
+
+    # 0. Reasoning Step인 경우 바로 bypass
+    if current_task.get('type') == 'reasoning':
+        logger.info("🧠 Reasoning Task detected. Skipping tool retrieval.")
+        return {
+            "tool_retrieved": [],
+            "tool_generated": [],
+            "decision": "reason"
+        }
 
     # 1. 벡터 DB에서 검색
     candidates = memory.search_tools(current_task['description'], k=5)
@@ -220,6 +235,7 @@ def tool_creator_node(state: AgentState):
     idx = state['current_step_index']
     current_task = plan[idx]
     history = state.get("feedback_history", [])
+    context_log = state.get("context_log", [])
 
     if history:
         # 🔄 수정 모드 (Fix Mode with History)
@@ -241,6 +257,9 @@ def tool_creator_node(state: AgentState):
             ### 1. CONTEXT
             **Original Task:**
             {current_task}
+            
+            **Reasoning Context:**
+            {json.dumps(context_log, indent=2, default=str)}
 
             **Previous Attempts & Failures:**
             {history_summary}
@@ -306,6 +325,8 @@ def tool_creator_node(state: AgentState):
             f"You are a generic Python function generator.\n"
             f"Task to solve:\n"
             f"{json.dumps(current_task, indent=2)}\n\n"
+            f"Context from previous reasoning steps:\n"
+            f"{json.dumps(context_log, indent=2, default=str)}\n\n"
             f"Requirements:\n"
             f"1. Create a Python function for the task.\n"
             f"2. The function must be independent and self-contained.\n"
@@ -526,6 +547,7 @@ def solver_node(state: AgentState, sandbox: AgentSandbox):
     inventory = state.get("variable_inventory", {})
     final_context = sandbox.get_final_context()
     tools = state.get("tool_generated", []) + state.get("tool_retrieved", [])
+    context_log = state.get("context_log", [])
     
     # 1. 정의 로드 (이미 Tester나 이전 단계에서 했겠지만 안전하게 다시)
     all_defs = "\n\n".join([t['code'] for t in tools])
@@ -538,6 +560,7 @@ def solver_node(state: AgentState, sandbox: AgentSandbox):
         # 2. 실전 실행 코드 생성
         prompt = (
             f"Task: {current_task}\nTools:\n{tool_desc}\nVariables currently in memory: {inventory}\n"
+            f"Reasoning Context: {json.dumps(context_log, indent=2, default=str)}\n"
             f"Write code to solve the task using real data variables.\n"
             f"Save result to new variable."
             f"Include necessary imports."
@@ -630,9 +653,54 @@ def solver_node(state: AgentState, sandbox: AgentSandbox):
         }
 
 
+def reasoner_node(state: AgentState):
+    plan = state['plan']
+    idx = state['current_step_index']
+    current_task = plan[idx]
+    context_log = state.get("context_log", [])
+    inventory = state.get("variable_inventory", {})
+    
+    logger.info(f"🧠 Reasoning about task: {current_task['description']}")
+
+    prompt = f"""You are a Logic & Reasoning Engine.
+    Your goal is to solve the current subtask using logical deduction, arithmetic, or summarization, WITHOUT writing Python code.
+
+    ---
+    ### Current Task:
+    {current_task['description']}
+
+    ### Context Variables (from previous steps):
+    {json.dumps(inventory, indent=2, default=str)}
+
+    ### Previous Reasoning/Context:
+    {json.dumps(context_log, indent=2, default=str)}
+
+    ---
+    Based on the above, provide the result or conclusion for the current task.
+    Be concise and specific.
+    If you calculate a value, state it clearly.
+    """
+
+    response = llm.invoke(prompt).content
+    logger.info(f"💡 Reasoning Result: {response}")
+
+    # Log update
+    new_log = context_log + [f"Step {idx+1} [Reasoning]: {response}"]
+
+    return {
+        "decision": "continue",
+        "current_step_index": idx + 1,
+        "context_log": new_log,
+        "tool_generated": [],
+        "tool_retrieved": [],
+        "error": None
+    }
+
+
 def final_answer_node(state: AgentState, sandbox: AgentSandbox):
     query = state['problem']
     inventory = state['variable_inventory'] # Solver들이 열심히 모은 결과값들
+    context_log = state.get("context_log", [])
     final_context = sandbox.get_final_context()
     
     logger.info("🏁 Generating Final Answer...")
@@ -644,11 +712,14 @@ def final_answer_node(state: AgentState, sandbox: AgentSandbox):
         f"We have processed the data and executed the plan. "
         f"Here are the collected variables and their values:\n"
         f"{json.dumps(final_context, indent=2, default=str)}\n\n"
+        f"Here is the reasoning log from non-coding steps:\n"
+        f"{json.dumps(context_log, indent=2, default=str)}\n\n"
         f"MISSION:\n"
-        f"1. Synthesize the information from the variables to answer the Original Question.\n"
+        f"1. Synthesize the information from the variables AND reasoning log to answer the Original Question.\n"
         f"2. Be direct and concise.\n"
         f"3. If the answer is a specific number or list found in variables, provide it clearly.\n"
-        f"4. Do NOT show python code or internal variable names in the final answer."
+        f"4. If the answer is a fraction, you MUST simplify it to lowest terms (e.g., 91/21 -> 13/3).\n"
+        f"5. Do NOT show python code or internal variable names in the final answer."
     )
     
     prompt = f"""You are a math expert. Your task is to answer the following question with your reasoning.
@@ -662,6 +733,9 @@ def final_answer_node(state: AgentState, sandbox: AgentSandbox):
 
                 ## Here are some variables collected from intermediate steps. You can use these variables for your reasoning.
                 {json.dumps(final_context, indent=2, default=str)}
+
+                ## Here is the reasoning log from non-coding steps:
+                {json.dumps(context_log, indent=2, default=str)}
 
                 ## Reasoning:
                 <Your step-by-step explanation>

@@ -13,3 +13,6 @@ test_env/
 test_workspace/
 result.json
 note.txt
+
+*.log
+*.json

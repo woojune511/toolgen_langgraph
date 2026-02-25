@@ -16,7 +16,7 @@ def main():
     # 1. 설정
     # 실행 모드 선택: "analysis" 또는 "modeling"
     MODE = "analysis" 
-    DSBENCH_ROOT = "/c1/geonju/project/data/dataset/DSBench"
+    DSBENCH_ROOT = "/c1/geonju/toolgen_langgraph/data/dataset/DSBench"
     
     logger.info(f"Starting DSBench Execution | Mode: {MODE}")
 

@@ -37,18 +37,37 @@ class SingleKernel:
             ip='127.0.0.1'     # 로컬호스트 강제
         )
         
-        # 3. 커널 시작
-        try:
-            self.km.start_kernel()
-            self.kc = self.km.client()
-            self.kc.start_channels()
-            self.kc.wait_for_ready(timeout=10)
-        except RuntimeError:
-            self.cleanup()
-            raise RuntimeError(f"Failed to start kernel in {self.work_dir}")
-        except Exception as e:
-            self.cleanup()
-            raise e
+        # 3. 커널 시작 (with retry)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                self.km.start_kernel()
+                self.kc = self.km.client()
+                self.kc.start_channels()
+                self.kc.wait_for_ready(timeout=10)
+                break  # 성공 시 루프 탈출
+            except RuntimeError:
+                logger.warning(f"⚠️ Kernel start failed (attempt {attempt+1}/{max_retries}) in {self.work_dir}")
+                self.cleanup()
+                if attempt < max_retries - 1:
+                    import time
+                    wait_time = 2 ** (attempt + 1)  # 2, 4, 8초
+                    logger.info(f"   Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    # 재시도를 위해 KernelManager 재생성
+                    self.connection_dir = tempfile.mkdtemp()
+                    os.environ["JUPYTER_RUNTIME_DIR"] = self.connection_dir
+                    self.km = KernelManager(
+                        kernel_name='python3',
+                        connection_dir=self.connection_dir,
+                        transport='tcp',
+                        ip='127.0.0.1'
+                    )
+                else:
+                    raise RuntimeError(f"Failed to start kernel in {self.work_dir} after {max_retries} attempts")
+            except Exception as e:
+                self.cleanup()
+                raise e
         
         # 4. 워크스페이스로 이동
         # (Jupyter는 런타임 폴더에서 시작했을 수 있으므로 이동 필요)
